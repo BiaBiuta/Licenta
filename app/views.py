@@ -552,6 +552,8 @@ class Optimizer:
         for ss in self.ScopeSelection:
             ss.calc_score()
             ss.calc_can_be_chosen()
+            print("score ",ss.Score)
+
 
     def select_top_random(self, list_pool, probability_threshold, target_nr):
         selected_element = []
@@ -606,16 +608,18 @@ class ScopeSelection:
         return optscope_days, optscope_nurses, optscope_shifttypes
 
     def get_opt_scope_anchor(self):
-        print("global_object optimizer ",self.Optimizer.GlobalObject.id)
-        nurses = [n for n in Nurse.objects.filter(GlobalObject_id=self.Optimizer.GlobalObject.id)]
-        days = [d for d in Day.objects.filter(GlobalObject_id=self.Optimizer.GlobalObject.id)]
+        # print("global_object optimizer ",self.Optimizer.GlobalObject.id)
+        # nurses = [n for n in Nurse.objects.filter(GlobalObject_id=self.Optimizer.GlobalObject.id)]
+        # days = [d for d in Day.objects.filter(GlobalObject_id=self.Optimizer.GlobalObject.id)]
+        nurses = [n for n in self.Optimizer.GlobalObject.Nurse]
+        days = [d for d in self.Optimizer.GlobalObject.Day]
         nr_nurses = len(nurses)
         print("len nurses", nr_nurses)
         nr_days = len(days)
         randomnr = random.randrange(nr_nurses * nr_days)
         nurse = nurses[math.floor(randomnr / nr_days)]
         day = days[randomnr % nr_days]
-        nurseday = [nd for nd in NurseDay.objects.filter(Nurse=nurse,Day=day)][0]
+        nurseday = [nd for nd in nurse.NurseDay if nd.Day == day][0]
         print('nurseday', nurseday.Nurse.EmployeeID, nurseday.Day.DayID)
         return nurseday
 
@@ -727,6 +731,7 @@ class ScopeSelectionRandom(ScopeSelection):
 # %%
 class ScopeSelectionMinTotalMinutes(ScopeSelection):
     def get_opt_scope_anchor(self):
+        print("globalObject Nurese ",self.Optimizer.GlobalObject.Nurse)
         violating_nursedays = [n.NurseDay for n in self.Optimizer.GlobalObject.Nurse if n.KPIHardMinTotalMinutes > 0]
         violating_nursedays = sum(violating_nursedays, [])  # flatten to 1 dimensional
         all_nds = [nd.NurseDayShiftType for nd in violating_nursedays]
@@ -970,7 +975,7 @@ class OptimizerIteration:
 
     def get_nurseday(self, n, d):
         nurse = self.get_nurse(n)
-        nurseday = [nd for nd in NurseDay.objects.filter(Nurse=nurse) if nd.Day.DayID == d][0]
+        nurseday = [nd for nd in nurse.NurseDay if nd.Day.DayID == d][0]
         return nurseday
 
     def get_shifttype(self, s):
@@ -980,12 +985,12 @@ class OptimizerIteration:
 
     def get_nurseshifttype(self, n, s):
         nurse = self.get_nurse(n)
-        nurseshifttype = [ns for ns in NurseShiftType.objects.filter(Nurse=nurse) if ns.ShiftType.ShiftID == s][0]
+        nurseshifttype = [ns for ns in nurse.NurseShiftType if ns.ShiftType.ShiftID == s][0]
         return nurseshifttype
 
     def get_nursedayshifttype(self, s, n, d):
         nurseday = self.get_nurseday(n, d)
-        nursedayshifttype = [nsd for nsd in NurseDayShiftType.objects.filter(NurseDay=nurseday) if nsd.ShiftType.ShiftID == s]
+        nursedayshifttype = [nsd for nsd in nurseday.NurseDayShiftType if nsd.ShiftType.ShiftID == s]
         return nursedayshifttype
 
     def get_day(self, d):
@@ -994,13 +999,13 @@ class OptimizerIteration:
 
     def get_dayshifttype(self, s, d):
         day = self.get_day(d)
-        day_shifttype = [ds for ds in DayShiftType.objects.filter(Day=day) if ds.ShiftType.ShiftID == s][0]
+        day_shifttype = [ds for ds in day.DayShiftType if ds.ShiftType.ShiftID == s][0]
         return day_shifttype
 
     def get_minutes_planned_outscope(self, n):
         nurse = self.get_nurse(n)
         minutes_planned_outscope = 0.0
-        for nd in NurseDay.objects.filter(Nurse=nurse):
+        for nd in nurse.NurseDay:
             # If a nd is outside scope OR If a nd is inside scope but has shift outside scope assigned
             if (not nd.Day.IsInsideOptScope and nd.AssignedShift != []) or (
                     nd.AssignedShift != [] and not nd.AssignedShift.IsInsideOptScope):
@@ -1009,9 +1014,9 @@ class OptimizerIteration:
 
     def get_shift_planned_outscope(self, s, d):
         shift_planned_outscope = 0
-        nurses_outscope = [nurse for nurse in Nurse.objects.all() if not nurse.IsInsideOptScope]
+        nurses_outscope = [nurse for nurse in global_object.Nurse if not nurse.IsInsideOptScope]
         for nurse_outscope in nurses_outscope:
-            nurse_outscope_day = [nd for nd in NurseDay.objects.filter(Nurse=nurse_outscope) if nd.Day.DayID == d][0]
+            nurse_outscope_day = [nd for nd in nurse_outscope.NurseDay if nd.Day.DayID == d][0]
             if nurse_outscope_day.AssignedShift != [] and nurse_outscope_day.AssignedShift.ShiftID == s:
                 shift_planned_outscope = shift_planned_outscope + 1
         return shift_planned_outscope
@@ -1083,30 +1088,10 @@ class OptimizerIteration:
         # The maximum amount of total time in minutes that can be assigned to each employee is defined in SECTION_STAFF in the field MaxTotalMinutes.
         # The duration in minutes of each shift is defined in SECTION_SHIFTS in the field Length in mins.
         def max_total_minutes(model, n):
-            # Obținem obiectul Nurse
             nurse = self.get_nurse(n)
-            print(f"Obiectul Nurse pentru {n}: {nurse}")
-
-            # Obținem minutele planificate în afara scope-ului
             minutes_planned_outscope = self.get_minutes_planned_outscope(n)
-            print(f"Minutele planificate în afara scope-ului pentru {n}: {minutes_planned_outscope}")
-
-            # Calculăm suma totală a minutelor pentru toate shifturile
-            total_minutes = sum(
-                sum(
-                    self.get_shifttype(s).LengthInMins * model.IsAssign[s, n, d]
-                    for d in model.DAYS
-                ) for s in model.SHIFTTYPES
-            )
-
-            print(f"Total minute pentru toate shifturile: {total_minutes}")
-            print(f"MaxTotalMins - minutes_planned_outscope: {nurse.MaxTotalMins - minutes_planned_outscope}")
-
-            # Verificăm dacă suma totală a minutelor este mai mică decât MaxTotalMins - minutele planificate în afara scope-ului
-            if total_minutes <= nurse.MaxTotalMins - minutes_planned_outscope:
-                return pyo.Constraint.Feasible  # Returnează Feasible dacă constrângerea este satisfăcută
-            else:
-                return pyo.Constraint.Infeasible
+            return sum(sum(self.get_shifttype(s).LengthInMins * model.IsAssign[s, n, d] for d in model.DAYS) for s in
+                       model.SHIFTTYPES) <= nurse.MaxTotalMins - minutes_planned_outscope
 
         # Constraint 5: MinTotalMinutes
         # The minimum amount of total time in minutes that must be assigned to each employee is defined in SECTION_STAFF in the field MinTotalMinutes.
@@ -1873,6 +1858,7 @@ def timetable(request):
         # Create new ShiftType object
         new_shifttype = ShiftType(shift_id, length_in_mins, forbidden_shifts, global_object_id)
         print(new_shifttype.ShiftID ,",",new_shifttype.LengthInMins)
+        global_object.set_relation_shifttype(new_shifttype)
         new_shifttype.save()
         # print('create new shifttype', shift_id, length_in_mins, forbidden_shifts, new_shifttype.ForbiddenShifts == [], len(new_shifttype.ForbiddenShifts))
     for nurse in raw_data[nurse_input_start:nurse_input_end]:
@@ -1891,91 +1877,172 @@ def timetable(request):
         new_nurse = Nurse(employee_id, max_shifts, max_total_mins, min_total_mins, max_cons_shifts, min_cons_shifts,
                           max_cons_days_off, max_weekends,
                           float('inf'), global_object_id)
+        global_object.set_relation_nurse(new_nurse)
         new_nurse.save()
         # print('create new nurse', employee_id, max_shifts, max_total_mins, min_total_mins, max_cons_shifts, min_cons_shifts, max_cons_days_off, max_weekends)
     for day in range(global_object.HorizonLength):
         # Create new Day object
 
         d=Day(day, global_object_id)
+        global_object.set_relation_day(d)
         d.save()
         print("Day", d.DayID)
 
 
-    for day in Day.objects.all():
+    for day in global_object.Day:
         day.get_next()
         day.save()
         day.get_prev()
         day.save()
         print("Day",day.DayID)
-
-    for nurse in Nurse.objects.all():
+    #
+    for nurse in global_object.Nurse:
         for maxshift in nurse.MaxShifts.split('|'):
             equal_index = maxshift.index('=')
             shiftID = maxshift[0:equal_index]
-            shifttype = ShiftType.objects.filter(ShiftID=shiftID).first()
+            # shifttype = ShiftType.objects.filter(ShiftID=shiftID).first()
+            shifttype = [s for s in global_object.ShiftType if s.ShiftID == shiftID][0]
             maxs = int(maxshift[equal_index + 1:])
             nur=NurseShiftType( Nurse=nurse, ShiftType=shifttype,MaxShifts=maxs)
             nur.save()
-    for nurse in Nurse.objects.all():
-        for day in Day.objects.all():
+    # for nurse in Nurse.objects.all():
+    #     for day in Day.objects.all():
+    #         # Create new NurseDay object
+    #         nr=NurseDay(IsDayOff=False,Nurse= nurse, Day=day)
+    #         nr.save()
+    for nurse in global_object.Nurse:
+        for day in global_object.Day:
             # Create new NurseDay object
             nr=NurseDay(IsDayOff=False,Nurse= nurse, Day=day)
+            nurse.set_relation_nurseday(nr)
+            day.set_relation_nurseday(nr)
             nr.save()
-
+    #
+    # for dayoff in raw_data[daysoff_input_start:daysoff_input_end]:
+    #     dayoff_information = dayoff.split(',')
+    #     dayoff_nurse = dayoff_information[0]
+    #     dayoff_dayoffs = dayoff_information[1:]
+    #
+    #     nurse = Nurse.objects.filter(EmployeeID=dayoff_nurse).first()
+    #     for dayoff in dayoff_dayoffs:
+    #         off = int(dayoff.strip())
+    #         day = Day.objects.filter(DayID=off).first()
+    #         # Find NurseDay object
+    #         nurseday = NurseDay.objects.filter(Nurse=nurse.EmployeeID, Day=day.DayID).first()
+    #
+    #         nurseday.IsDayOff = True
+    #         nurseday.save()
     for dayoff in raw_data[daysoff_input_start:daysoff_input_end]:
         dayoff_information = dayoff.split(',')
         dayoff_nurse = dayoff_information[0]
         dayoff_dayoffs = dayoff_information[1:]
 
-        nurse = Nurse.objects.filter(EmployeeID=dayoff_nurse).first()
+        nurse = [n for n in global_object.Nurse if n.EmployeeID == dayoff_nurse][0]
         for dayoff in dayoff_dayoffs:
             off = int(dayoff.strip())
-            day = Day.objects.filter(DayID=off).first()
+            day = [d for d in global_object.Day if d.DayID == off][0]
             # Find NurseDay object
-            nurseday = NurseDay.objects.filter(Nurse=nurse.EmployeeID, Day=day.DayID).first()
+            nurseday = [nd for nd in nurse.NurseDay if nd.Day == day][0]
 
             nurseday.IsDayOff = True
             nurseday.save()
-
-    for nurse in Nurse.objects.all():
-        for nurseday in NurseDay.objects.filter(Nurse=nurse):
+    #
+    # for nurse in Nurse.objects.all():
+    #     for nurseday in NurseDay.objects.filter(Nurse=nurse):
+    #         nurseday.get_next()
+    #         nurseday.save()
+    #         nurseday.get_prev()
+    #         nurseday.save()
+    for nurse in global_object.Nurse:
+        for nurseday in nurse.NurseDay:
             nurseday.get_next()
             nurseday.save()
             nurseday.get_prev()
             nurseday.save()
-
+    #
+    # for shiftonreq in raw_data[shifton_req_input_start:shifton_req_input_end]:
+    #     shiftonreq_information = shiftonreq.split(',')
+    #     shiftonreq_nurse = shiftonreq_information[0]
+    #     shiftonreq_day = int(shiftonreq_information[1])
+    #     shiftonreq_shift = shiftonreq_information[2]
+    #     shiftonreq_onrequestweight = float(shiftonreq_information[3])
+    #     nurse = Nurse.objects.filter(EmployeeID=shiftonreq_nurse).first()
+    #     day = Day.objects.filter(DayID=shiftonreq_day).first()
+    #     shifttype = ShiftType.objects.filter(ShiftID=shiftonreq_shift).first()
+    #
+    #     # Create new NurseShiftTypeDay object
+    #     nurseday = NurseDay.objects.filter(Nurse=nurse,Day=day).first()
+    #
+    #     nd=NurseDayShiftType(IsOnRequest=True,IsOffRequest= False,OnRequestWeight= shiftonreq_onrequestweight,OffRequestWeight= 0.0, Nurse=nurse,Day= day,ShiftType= shifttype, NurseDay=nurseday)
+    #     nd.save()
+    #
     for shiftonreq in raw_data[shifton_req_input_start:shifton_req_input_end]:
         shiftonreq_information = shiftonreq.split(',')
         shiftonreq_nurse = shiftonreq_information[0]
         shiftonreq_day = int(shiftonreq_information[1])
         shiftonreq_shift = shiftonreq_information[2]
         shiftonreq_onrequestweight = float(shiftonreq_information[3])
-        nurse = Nurse.objects.filter(EmployeeID=shiftonreq_nurse).first()
-        day = Day.objects.filter(DayID=shiftonreq_day).first()
-        shifttype = ShiftType.objects.filter(ShiftID=shiftonreq_shift).first()
+        nurse = [n for n in global_object.Nurse if n.EmployeeID == shiftonreq_nurse][0]
+        day = [d for d in global_object.Day if d.DayID == shiftonreq_day][0]
+        shifttype = [s for s in global_object.ShiftType if s.ShiftID == shiftonreq_shift][0]
 
         # Create new NurseShiftTypeDay object
-        nurseday = NurseDay.objects.filter(Nurse=nurse,Day=day).first()
+        nurseday = [nd for nd in nurse.NurseDay if nd.Day == day][0]
 
         nd=NurseDayShiftType(IsOnRequest=True,IsOffRequest= False,OnRequestWeight= shiftonreq_onrequestweight,OffRequestWeight= 0.0, Nurse=nurse,Day= day,ShiftType= shifttype, NurseDay=nurseday)
+        nurseday.set_relation_nursedayshifttype(nd)
+        day.set_relation_nursedayshifttype(nd)
+        nurse.set_relation_nursedayshifttype(nd)
+        shifttype.set_relation_nursedayshifttype(nd)
         nd.save()
-
+    # for shiftoffreq in raw_data[shiftoff_req_input_start:shiftoff_req_input_end]:
+    #     shiftoffreq_information = shiftoffreq.split(',')
+    #     shiftoffreq_nurse = shiftoffreq_information[0]
+    #     shiftoffreq_day = int(shiftoffreq_information[1])
+    #     shiftoffreq_shift = shiftoffreq_information[2]
+    #     shiftoffreq_offrequestweight = float(shiftoffreq_information[3])
+    #     nurse = Nurse.objects.filter(EmployeeID=shiftoffreq_nurse).first()
+    #     day = Day.objects.filter(DayID=shiftoffreq_day).first()
+    #     shifttype = ShiftType.objects.filter(ShiftID=shiftoffreq_shift).first()
+    #
+    #     # Create new or find existing NurseShiftTypeDay object
+    #     nurseday = NurseDay.objects.filter(Nurse=nurse,Day=day).first()
+    #
+    #     nds=NurseDayShiftType(IsOnRequest=False,IsOffRequest= True,OnRequestWeight= 0.0,OffRequestWeight= shiftoffreq_offrequestweight,Nurse= nurse,Day= day,ShiftType= shifttype,NurseDay= nurseday)
+    #     nds.save()
     for shiftoffreq in raw_data[shiftoff_req_input_start:shiftoff_req_input_end]:
         shiftoffreq_information = shiftoffreq.split(',')
         shiftoffreq_nurse = shiftoffreq_information[0]
         shiftoffreq_day = int(shiftoffreq_information[1])
         shiftoffreq_shift = shiftoffreq_information[2]
         shiftoffreq_offrequestweight = float(shiftoffreq_information[3])
-        nurse = Nurse.objects.filter(EmployeeID=shiftoffreq_nurse).first()
-        day = Day.objects.filter(DayID=shiftoffreq_day).first()
-        shifttype = ShiftType.objects.filter(ShiftID=shiftoffreq_shift).first()
+        nurse = [n for n in global_object.Nurse if n.EmployeeID == shiftoffreq_nurse][0]
+        day = [d for d in global_object.Day if d.DayID == shiftoffreq_day][0]
+        shifttype = [s for s in global_object.ShiftType if s.ShiftID == shiftoffreq_shift][0]
 
         # Create new or find existing NurseShiftTypeDay object
-        nurseday = NurseDay.objects.filter(Nurse=nurse,Day=day).first()
-
+        nurseday = [nd for nd in nurse.NurseDay if nd.Day == day][0]
         nds=NurseDayShiftType(IsOnRequest=False,IsOffRequest= True,OnRequestWeight= 0.0,OffRequestWeight= shiftoffreq_offrequestweight,Nurse= nurse,Day= day,ShiftType= shifttype,NurseDay= nurseday)
+        nurseday.set_relation_nursedayshifttype(nds)
+        day.set_relation_nursedayshifttype(nds)
+        nurse.set_relation_nursedayshifttype(nds)
+        shifttype.set_relation_nursedayshifttype(nds)
         nds.save()
-
+    #
+    # for cover in raw_data[cover_req_input_start:cover_req_input_end]:
+    #     cover_information = cover.split(',')
+    #     cover_day = int(cover_information[0])
+    #     cover_shift = cover_information[1]
+    #     cover_req = int(cover_information[2])
+    #     cover_underweight = float(cover_information[3])
+    #     cover_overweight = float(cover_information[4])
+    #
+    #     day = Day.objects.filter(DayID=cover_day).first()
+    #     shifttype = ShiftType.objects.filter(ShiftID=cover_shift).first()
+    #
+    #     # Create new DayShiftType object
+    #     dst=DayShiftType(NrRequired=cover_req,UnderCoverWeight= cover_underweight, OverCoverWeight=cover_overweight,ShiftType= shifttype,Day= day)
+    #     dst.save()
     for cover in raw_data[cover_req_input_start:cover_req_input_end]:
         cover_information = cover.split(',')
         cover_day = int(cover_information[0])
@@ -1984,23 +2051,49 @@ def timetable(request):
         cover_underweight = float(cover_information[3])
         cover_overweight = float(cover_information[4])
 
-        day = Day.objects.filter(DayID=cover_day).first()
-        shifttype = ShiftType.objects.filter(ShiftID=cover_shift).first()
+        day = [d for d in global_object.Day if d.DayID == cover_day][0]
+        shifttype = [s for s in global_object.ShiftType if s.ShiftID == cover_shift][0]
 
         # Create new DayShiftType object
         dst=DayShiftType(NrRequired=cover_req,UnderCoverWeight= cover_underweight, OverCoverWeight=cover_overweight,ShiftType= shifttype,Day= day)
+        day.set_relation_dayshifttype(dst)
+        shifttype.set_relation_dayshifttype(dst)
         dst.save()
+    #
+    # # Obținem toate ShiftType din baza de date
+    # all_shifttypes = ShiftType.objects.all()
+    #
+    # for nurse in Nurse.objects.all():  # Obținem toți medicii din baza de date
+    #     for nurseday in NurseDay.objects.filter(Nurse=nurse).all():  # Obținem toate zilele de lucru ale fiecărui medic
+    #         # Obținem toate ShiftType-urile deja atribuite acelei zile
+    #         nds_shifts = NurseDayShiftType.objects.filter(Nurse =nurse,NurseDay=nurseday).values_list('ShiftType', flat=True)
+    #
+    #         # Găsim ShiftType-urile care nu sunt deja atribuite
+    #         nds_shifts_to_create = [s for s in all_shifttypes if s not in nds_shifts]
+    #
+    #         for shifttype in nds_shifts_to_create:
+    #             # Creăm un nou obiect NurseDayShiftType și îl salvăm
+    #             nds = NurseDayShiftType(
+    #                 IsOffRequest=False,
+    #                 IsOnRequest=False,
+    #                 OnRequestWeight=0.0,
+    #                 OffRequestWeight=0.0,
+    #                 Nurse=nurse,
+    #                 Day=nurseday.Day,
+    #                 ShiftType=shifttype,
+    #                 NurseDay=nurseday
+    #             )
+    #             nds.save()
+    all_shifttypes = [shifttype for shifttype in global_object.ShiftType]
 
-    # Obținem toate ShiftType din baza de date
-    all_shifttypes = ShiftType.objects.all()
-
-    for nurse in Nurse.objects.all():  # Obținem toți medicii din baza de date
-        for nurseday in NurseDay.objects.filter(Nurse=nurse).all():  # Obținem toate zilele de lucru ale fiecărui medic
+    for nurse in global_object.Nurse:  # Obținem toți medicii din baza de date
+        for nurseday in nurse.NurseDay:  # Obținem toate zilele de lucru ale fiecărui medic
             # Obținem toate ShiftType-urile deja atribuite acelei zile
-            nds_shifts = NurseDayShiftType.objects.filter(Nurse =nurse,NurseDay=nurseday).values_list('ShiftType', flat=True)
+            nds_shifts = [nds.ShiftType for nds in nurseday.NurseDayShiftType]
+            nds_shifts_to_create = [s for s in all_shifttypes if s not in nds_shifts]
 
             # Găsim ShiftType-urile care nu sunt deja atribuite
-            nds_shifts_to_create = [s for s in all_shifttypes if s not in nds_shifts]
+
 
             for shifttype in nds_shifts_to_create:
                 # Creăm un nou obiect NurseDayShiftType și îl salvăm
@@ -2014,25 +2107,32 @@ def timetable(request):
                     ShiftType=shifttype,
                     NurseDay=nurseday
                 )
+                shifttype.set_relation_nursedayshifttype(nds)
                 nds.save()
-    global_object.Nurse= Nurse.objects.filter(GlobalObject_id=global_object_id)
-    #global_object.Nurse.append(nurse)
-    global_object.Day= Day.objects.filter(GlobalObject_id=global_object_id)
+    # global_object.Nurse= Nurse.objects.filter(GlobalObject_id=global_object_id)
+    # #global_object.Nurse.append(nurse)
+    # global_object.Day= Day.objects.filter(GlobalObject_id=global_object_id)
+    #
+    # # for shiftType in ShiftType.objects.filter(GlobalObject_id=global_object_id):
+    # global_object.ShiftType=ShiftType.objects.filter(GlobalObject_id=global_object_id)
 
-    # for shiftType in ShiftType.objects.filter(GlobalObject_id=global_object_id):
-    global_object.ShiftType=ShiftType.objects.filter(GlobalObject_id=global_object_id)
     print("nurse-nurseday",global_object.Nurse[0])
     print("nurse-DayShiftType",global_object.Nurse[0])
     print("nurse-shiftType",global_object.ShiftType[0])
-    # days=Day.objects.all()
-    # nurses=Nurse.objects.all()
-    # shifts-ShiftType.objects.
-    # for d in day:
-    #
+    # # days=Day.objects.all()
+    # # nurses=Nurse.objects.all()
+    # # shifts-ShiftType.objects.
+    # # for d in day:
+    # #
     timelimit = dt.timedelta(seconds=120)
     maxiteration = 50
     #print(global_object.get_nurses()[0])
     optimizer = Optimizer(timelimit, maxiteration, 0.7, global_object)
+    print("nurse ",optimizer.GlobalObject.Nurse)
+    print ("days ",optimizer.GlobalObject.Day)
+    print ("shiftType ",optimizer.GlobalObject.ShiftType)
+
+
     scopeselection_random = ScopeSelectionRandom('ScopeSelectionRandom', 15, 15, 10, optimizer)
     scopeselection_mintotalminutes = ScopeSelectionMinTotalMinutes('ScopeSelectionMinTotalMinutes', 5, 30, 10, optimizer)
     scopeselection_shiftonreq = ScopeSelectionShiftOnRequest('ScopeSelectionShiftOnRequest', 15, 15, 10, optimizer)
@@ -2047,6 +2147,9 @@ def timetable(request):
 
         # Get OptScope
         days, nurses, shifttypes = selected_scope_selection.get_opt_scope()
+        print("iteratie ",optimizer.CurrentIteration, " nurses ", nurses)
+        print("iteratie ",optimizer.CurrentIteration, " days ", days)
+        print("iteratie ",optimizer.CurrentIteration, " shiftTypes ", shifttypes)
         global_object.reset_isinsideoptscope()
         global_object.set_isinsideoptscope(nurses, days, shifttypes)
         print([d.DayID for d in days])
@@ -2074,162 +2177,162 @@ def timetable(request):
         optimizer.CurrentIteration = optimizer.CurrentIteration + 1
         print(optimizer.CurrentIteration)
 
-    # print('\nSelector statistics')
-    # for ss in optimizer.ScopeSelection:
-    #     optimizer_iterations = [oi.IterationNr for oi in ss.OptimizerIteration]
-    #     average_solve_duration = 0.0
-    #     if len(optimizer_iterations) > 0:
-    #         average_solve_duration = sum([oi.DurationSolveInSeconds for oi in ss.OptimizerIteration]) / len(
-    #             optimizer_iterations)
-    #     print(ss.Name, 'nr_selected', len(optimizer_iterations), 'iterations:', optimizer_iterations,
-    #           average_solve_duration)
-    #
-    # print('\nOptimizer iteration statistics')
-    # print('#Feasible', len([oi for oi in optimizer.OptimizerIteration if oi.IsFeasible == True]))
-    # print('#Infeasible', len([oi for oi in optimizer.OptimizerIteration if oi.IsFeasible == False]))
-    # print('#Rollback', len([oi for oi in optimizer.OptimizerIteration if oi.IsRollback == True]))
-    # print('Rollback:', [oi.IterationNr for oi in optimizer.OptimizerIteration if oi.IsRollback == True])
-    # print('Hard KPI', [oi.TotalKPIHard for oi in optimizer.OptimizerIteration])
-    # print('Soft KPI', [oi.TotalKPISoft for oi in optimizer.OptimizerIteration])
-    # print('Time elapsed', [oi.TimeElapsedInSeconds for oi in optimizer.OptimizerIteration])
-    #
-    # print('\nOpt scope statistics')
-    # for n in global_object.Nurse:
-    #     oi = [optscope_n for optscope_n in n.OptScopeNurse]
-    #     print('nurse', n.EmployeeID, len(oi))
-    # for d in global_object.Day:
-    #     oi = [optscope_d for optscope_d in d.OptScopeDay]
-    #     print('day', d.DayID, len(oi))
-    # for s in global_object.ShiftType:
-    #     oi = [optscope_s for optscope_s in s.OptScopeShiftType]
-    #     print('shifttype', s.ShiftID, len(oi))
-    # for n in global_object.Nurse:
-    #     for nd in n.NurseDay:
-    #         for nds in nd.NurseDayShiftType:
-    #             print(n.EmployeeID, nd.Day.DayID, nds.ShiftType.ShiftID, nds.NrSelectedInOptScope)
-    #
-    # selected_scope_selection = optimizer.select_scope_selection()
-    # # selected_scope_selection = [ss for ss in optimizer.ScopeSelection if isinstance(ss, ScopeSelectionShiftUnderCover)][0]
-    # print(optimizer.CurrentIteration, selected_scope_selection.Name)
-    #
-    # # Get OptScope
-    # days, nurses, shifttypes = selected_scope_selection.get_opt_scope()
-    # global_object.reset_isinsideoptscope()
-    # global_object.set_isinsideoptscope(nurses, days, shifttypes)
-    # print([d.DayID for d in days])
-    # print([n.EmployeeID for n in nurses])
-    # print([s.ShiftID for s in shifttypes])
-    #
-    # # Create OptimizerIteration objecthandle
-    # optimizer_iteration = OptimizerIteration(optimizer.CurrentIteration, time.time(), optimizer, selected_scope_selection)
-    #
-    # # Create OptScope objects
-    # optimizer_iteration.create_optscope_objects(nurses, days, shifttypes)
-    #
-    # # Optimize OptScope
-    # is_debug = False
-    # current_dt = dt.datetime.now().strftime('%d%m%Y_%H%M%S')
-    # filename = str(optimizer_iteration.IterationNr) + '_' + current_dt
-    #
-    # model = optimizer_iteration.initialize_mip()
-    # instance, results = optimizer_iteration.solve_mip(model, is_debug, filename)
-    # optimizer_iteration.handle_result(model, instance, results, is_debug, filename, True)
-    #
-    # # Decide to rollback/accept solution
-    # # Update attributes
-    # optimizer.CurrentIteration = optimizer.CurrentIteration + 1
-    #
-    # print('\nOpt scope statistics')
-    # for n in global_object.Nurse:
-    #     oi = [optscope_n for optscope_n in n.OptScopeNurse]
-    #     print('nurse', n.EmployeeID, len(oi))
-    # for d in global_object.Day:
-    #     oi = [optscope_d for optscope_d in d.OptScopeDay]
-    #     print('day', d.DayID, len(oi))
-    # for s in global_object.ShiftType:
-    #     oi = [optscope_s for optscope_s in s.OptScopeShiftType]
-    #     print('shifttype', s.ShiftID, len(oi))
-    # for n in global_object.Nurse:
-    #     for nd in n.NurseDay:
-    #         for nds in nd.NurseDayShiftType:
-    #             print(n.EmployeeID, nd.Day.DayID, nds.ShiftType.ShiftID, nds.NrSelectedInOptScope)
-    #
-    # optimizer.plan_up_to_iteration(1)
-    #
-    # # Print in tabular format
-    # sorted_nurses = sorted(global_object.Nurse, key=lambda x: x.EmployeeID, reverse=False)
-    # sorted_days = sorted(global_object.Day, key=lambda x: x.DayID, reverse=False)
-    # for n in sorted_nurses:
-    #     for d in global_object.Day:
-    #         nurseday = [nd for nd in n.NurseDay if nd.Day == d][0]
-    #         assigned_shifttype = nurseday.AssignedShift
-    #         assigned_shifttype_id = ''
-    #         if assigned_shifttype != []:
-    #             assigned_shifttype_id = assigned_shifttype.ShiftID
-    #         # print(assigned_shifttype_id, end='')
-    #         print(n.EmployeeID, d.DayID, assigned_shifttype_id, end='')
-    #         if d != sorted_days[-1]:
-    #             print('\t', end='')
-    #     print('\n', end='')
-    #
-    # # Print KPI
-    # print('=====')
-    # print(global_object.calc_TotalKPIHard(True))
-    # print(global_object.calc_TotalKPISoft(True))
-    #
-    # # Run one iteration debug
-    # # Get OptScope
-    # # nurses = [n for n in global_object.Nurse if n.EmployeeID == 'C' or n.EmployeeID == 'D' or n.EmployeeID == 'I' or n.EmployeeID == 'P' or n.EmployeeID == 'Q']
-    # # days = [d for d in global_object.Day if d.DayID >= 2 and d.DayID <= 6]
-    # # shifttypes = [s for s in global_object.ShiftType if s.ShiftID == 'D' or s.ShiftID == 'D' or s.ShiftID == 'D']
-    # nurses = [n for n in global_object.Nurse]
-    # days = [d for d in global_object.Day]
-    # shifttypes = [s for s in global_object.ShiftType]
-    # global_object.reset_isinsideoptscope()
-    # global_object.set_isinsideoptscope(nurses, days, shifttypes)
-    #
-    # # Create OptimizerIteration object
-    # scope_selection = [ss for ss in optimizer.ScopeSelection][0]
-    # optimizer_iteration = OptimizerIteration(99, time.time(), optimizer, scope_selection)
-    #
-    # # Create OptScope objects
-    # optimizer_iteration.create_optscope_objects(nurses, days, shifttypes)
-    #
-    # print(type(optimizer_iteration.OptScopeNurse), [n.Nurse.EmployeeID for n in optimizer_iteration.OptScopeNurse])
-    #
-    # # Optimize OptScope
-    # is_debug = True
-    # current_dt = dt.datetime.now().strftime('%d%m%Y_%H%M%S')
-    # filename = str(optimizer_iteration.IterationNr) + '_' + current_dt
-    #
-    # model = optimizer_iteration.initialize_mip()
-    # instance, results = optimizer_iteration.solve_mip(model, is_debug, filename)
-    # optimizer_iteration.handle_result(model, instance, results, is_debug, filename, False)
-    # import pandas as pd
-    #
-    # def generate_schedule(global_object):
-    #     schedule_data = []
-    #
-    #     for day in sorted(global_object.Day, key=lambda d: d.DayID):
-    #         for nurse in global_object.Nurse:
-    #             nurse_day = next((nd for nd in nurse.NurseDay if nd.Day == day), None)
-    #             if nurse_day:
-    #                 shift = nurse_day.AssignedShift.ShiftID if nurse_day.AssignedShift else "Off"
-    #                 schedule_data.append({"Day": day.DayID, "Nurse": nurse.EmployeeID, "Shift": shift})
-    #
-    #     # Convertim într-un DataFrame pentru a fi mai ușor de citit
-    #     df = pd.DataFrame(schedule_data)
-    #     df = df.pivot(index="Day", columns="Nurse", values="Shift").fillna("Off")
-    #
-    #     print("\nOrarul Generat:\n")
-    #     print(df)
-    #
-    #     # Salvare în CSV pentrupentru analiză ulterioară
-    #     df.to_csv("nurse_schedule.csv")
-    #     print("\nOrarul a fost salvat în `nurse_schedule.csv`")
-    #
-    # # Apelează funcția după ce algoritmul a generat un orar
-    # generate_schedule(global_object)
+    print('\nSelector statistics')
+    for ss in optimizer.ScopeSelection:
+        optimizer_iterations = [oi.IterationNr for oi in ss.OptimizerIteration]
+        average_solve_duration = 0.0
+        if len(optimizer_iterations) > 0:
+            average_solve_duration = sum([oi.DurationSolveInSeconds for oi in ss.OptimizerIteration]) / len(
+                optimizer_iterations)
+        print(ss.Name, 'nr_selected', len(optimizer_iterations), 'iterations:', optimizer_iterations,
+              average_solve_duration)
+
+    print('\nOptimizer iteration statistics')
+    print('#Feasible', len([oi for oi in optimizer.OptimizerIteration if oi.IsFeasible == True]))
+    print('#Infeasible', len([oi for oi in optimizer.OptimizerIteration if oi.IsFeasible == False]))
+    print('#Rollback', len([oi for oi in optimizer.OptimizerIteration if oi.IsRollback == True]))
+    print('Rollback:', [oi.IterationNr for oi in optimizer.OptimizerIteration if oi.IsRollback == True])
+    print('Hard KPI', [oi.TotalKPIHard for oi in optimizer.OptimizerIteration])
+    print('Soft KPI', [oi.TotalKPISoft for oi in optimizer.OptimizerIteration])
+    print('Time elapsed', [oi.TimeElapsedInSeconds for oi in optimizer.OptimizerIteration])
+
+    print('\nOpt scope statistics')
+    for n in global_object.Nurse:
+        oi = [optscope_n for optscope_n in n.OptScopeNurse]
+        print('nurse', n.EmployeeID, len(oi))
+    for d in global_object.Day:
+        oi = [optscope_d for optscope_d in d.OptScopeDay]
+        print('day', d.DayID, len(oi))
+    for s in global_object.ShiftType:
+        oi = [optscope_s for optscope_s in s.OptScopeShiftType]
+        print('shifttype', s.ShiftID, len(oi))
+    for n in global_object.Nurse:
+        for nd in n.NurseDay:
+            for nds in nd.NurseDayShiftType:
+                print(n.EmployeeID, nd.Day.DayID, nds.ShiftType.ShiftID, nds.NrSelectedInOptScope)
+
+    selected_scope_selection = optimizer.select_scope_selection()
+    # selected_scope_selection = [ss for ss in optimizer.ScopeSelection if isinstance(ss, ScopeSelectionShiftUnderCover)][0]
+    print(optimizer.CurrentIteration, selected_scope_selection.Name)
+
+    # Get OptScope
+    days, nurses, shifttypes = selected_scope_selection.get_opt_scope()
+    global_object.reset_isinsideoptscope()
+    global_object.set_isinsideoptscope(nurses, days, shifttypes)
+    print([d.DayID for d in days])
+    print([n.EmployeeID for n in nurses])
+    print([s.ShiftID for s in shifttypes])
+
+    # Create OptimizerIteration objecthandle
+    optimizer_iteration = OptimizerIteration(optimizer.CurrentIteration, time.time(), optimizer, selected_scope_selection)
+
+    # Create OptScope objects
+    optimizer_iteration.create_optscope_objects(nurses, days, shifttypes)
+
+    # Optimize OptScope
+    is_debug = False
+    current_dt = dt.datetime.now().strftime('%d%m%Y_%H%M%S')
+    filename = str(optimizer_iteration.IterationNr) + '_' + current_dt
+
+    model = optimizer_iteration.initialize_mip()
+    instance, results = optimizer_iteration.solve_mip(model, is_debug, filename)
+    optimizer_iteration.handle_result(model, instance, results, is_debug, filename, True)
+
+    # Decide to rollback/accept solution
+    # Update attributes
+    optimizer.CurrentIteration = optimizer.CurrentIteration + 1
+
+    print('\nOpt scope statistics')
+    for n in global_object.Nurse:
+        oi = [optscope_n for optscope_n in n.OptScopeNurse]
+        print('nurse', n.EmployeeID, len(oi))
+    for d in global_object.Day:
+        oi = [optscope_d for optscope_d in d.OptScopeDay]
+        print('day', d.DayID, len(oi))
+    for s in global_object.ShiftType:
+        oi = [optscope_s for optscope_s in s.OptScopeShiftType]
+        print('shifttype', s.ShiftID, len(oi))
+    for n in global_object.Nurse:
+        for nd in n.NurseDay:
+            for nds in nd.NurseDayShiftType:
+                print(n.EmployeeID, nd.Day.DayID, nds.ShiftType.ShiftID, nds.NrSelectedInOptScope)
+
+    optimizer.plan_up_to_iteration(1)
+
+    # Print in tabular format
+    sorted_nurses = sorted(global_object.Nurse, key=lambda x: x.EmployeeID, reverse=False)
+    sorted_days = sorted(global_object.Day, key=lambda x: x.DayID, reverse=False)
+    for n in sorted_nurses:
+        for d in global_object.Day:
+            nurseday = [nd for nd in n.NurseDay if nd.Day == d][0]
+            assigned_shifttype = nurseday.AssignedShift
+            assigned_shifttype_id = ''
+            if assigned_shifttype != []:
+                assigned_shifttype_id = assigned_shifttype.ShiftID
+            # print(assigned_shifttype_id, end='')
+            print(n.EmployeeID, d.DayID, assigned_shifttype_id, end='')
+            if d != sorted_days[-1]:
+                print('\t', end='')
+        print('\n', end='')
+
+    # Print KPI
+    print('=====')
+    print(global_object.calc_TotalKPIHard(True))
+    print(global_object.calc_TotalKPISoft(True))
+
+    # Run one iteration debug
+    # Get OptScope
+    # nurses = [n for n in global_object.Nurse if n.EmployeeID == 'C' or n.EmployeeID == 'D' or n.EmployeeID == 'I' or n.EmployeeID == 'P' or n.EmployeeID == 'Q']
+    # days = [d for d in global_object.Day if d.DayID >= 2 and d.DayID <= 6]
+    # shifttypes = [s for s in global_object.ShiftType if s.ShiftID == 'D' or s.ShiftID == 'D' or s.ShiftID == 'D']
+    nurses = [n for n in global_object.Nurse]
+    days = [d for d in global_object.Day]
+    shifttypes = [s for s in global_object.ShiftType]
+    global_object.reset_isinsideoptscope()
+    global_object.set_isinsideoptscope(nurses, days, shifttypes)
+
+    # Create OptimizerIteration object
+    scope_selection = [ss for ss in optimizer.ScopeSelection][0]
+    optimizer_iteration = OptimizerIteration(99, time.time(), optimizer, scope_selection)
+
+    # Create OptScope objects
+    optimizer_iteration.create_optscope_objects(nurses, days, shifttypes)
+
+    print(type(optimizer_iteration.OptScopeNurse), [n.Nurse.EmployeeID for n in optimizer_iteration.OptScopeNurse])
+
+    # Optimize OptScope
+    is_debug = True
+    current_dt = dt.datetime.now().strftime('%d%m%Y_%H%M%S')
+    filename = str(optimizer_iteration.IterationNr) + '_' + current_dt
+
+    model = optimizer_iteration.initialize_mip()
+    instance, results = optimizer_iteration.solve_mip(model, is_debug, filename)
+    optimizer_iteration.handle_result(model, instance, results, is_debug, filename, False)
+    import pandas as pd
+
+    def generate_schedule(global_object):
+        schedule_data = []
+
+        for day in sorted(global_object.Day, key=lambda d: d.DayID):
+            for nurse in global_object.Nurse:
+                nurse_day = next((nd for nd in nurse.NurseDay if nd.Day == day), None)
+                if nurse_day:
+                    shift = nurse_day.AssignedShift.ShiftID if nurse_day.AssignedShift else "Off"
+                    schedule_data.append({"Day": day.DayID, "Nurse": nurse.EmployeeID, "Shift": shift})
+
+        # Convertim într-un DataFrame pentru a fi mai ușor de citit
+        df = pd.DataFrame(schedule_data)
+        df = df.pivot(index="Day", columns="Nurse", values="Shift").fillna("Off")
+
+        print("\nOrarul Generat:\n")
+        print(df)
+
+        # Salvare în CSV pentrupentru analiză ulterioară
+        df.to_csv("nurse_schedule.csv")
+        print("\nOrarul a fost salvat în `nurse_schedule.csv`")
+
+    # Apelează funcția după ce algoritmul a generat un orar
+    generate_schedule(global_object)
 
 
 from django.contrib.auth.decorators import login_required

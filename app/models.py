@@ -1,3 +1,5 @@
+import math
+
 from django.db import models
 from django.contrib.auth.models import AbstractUser
 from django.utils.html import format_html
@@ -169,6 +171,7 @@ class GlobalObject(models.Model):
 
     def set_relation_day(self, day):
         self.Day.append(day)
+        print ("am setat global object ",self.Day , self.id)
 
     def set_relation_shifttype(self, shifttype):
         self.ShiftType.append(shifttype)
@@ -493,6 +496,7 @@ class Day(models.Model):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.IsWeekend = int(self.DayID) % 7 == 5 or int(self.DayID) % 7 == 6
+        self.WeekID = math.floor(int(self.DayID) / 7)
         self.KPISoftUnderCover = 0.0
         self.KPISoftOverCover = 0.0
         self.IsInsideOptScope = False
@@ -502,8 +506,8 @@ class Day(models.Model):
         self.Next = []
         self.Previous = []
         self.OptScopeDay = []
-        if self.GlobalObject:
-            self.GlobalObject.set_relation_day(self)
+        self.GlobalObject.set_relation_day(self)
+        print ("in clasa Day ",self.GlobalObject.Day)
     def set_relation_nurseday(self, nurseday):
         self.NurseDay.append(nurseday)
 
