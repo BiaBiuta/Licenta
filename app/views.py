@@ -5,6 +5,17 @@ import random as rnd
 from django.http import request
 from django.shortcuts import render, redirect
 import prettytable
+import os
+# import cplex
+# print(cplex.__version__)
+
+# Adăugați manual CPLEX în PATH
+os.environ["PATH"] += r";C:\Program Files\IBM\ILOG\CPLEX_Studio2212\cplex\bin\x64_win64"
+
+# Debug: verificați variabila PATH
+print("PATH:", os.environ["PATH"])
+import sys
+print("Python exec:", sys.executable)
 
 from django.core.mail import send_mail
 from django.conf import settings
@@ -1515,10 +1526,18 @@ class OptimizerIteration:
         # Create instance
         print('create instance')
         instance = model.create_instance()
+        print(instance)
+        print(model.values())
         # Execute solver
         print('execute solver start')
-        solver_path = r"C:\Program Files\IBM\ILOG\CPLEX_Studio2212\cplex\bin\x64_win64\cplex.exe"
-        opt = pyo.SolverFactory('cplex', executable=solver_path)
+        solver_path = r'"C:\Program Files\IBM\ILOG\CPLEX_Studio2212\cplex\bin\x64_win64\cplex.exe"'
+        opt = pyo.SolverFactory('cplex')
+        opt.set_executable(r"C:\Program Files\IBM\ILOG\CPLEX_Studio2212\cplex\bin\x64_win64\cplex.exe", validate=False)
+
+        print("Solver available:", opt.available())
+        print("Solver executable:", opt.executable())
+        print(f"Solver Path: {solver_path}")
+        print(f"Solver Exists: {os.path.exists(solver_path)}")
         print('execute solver end')
         results = []
         if is_debug:
