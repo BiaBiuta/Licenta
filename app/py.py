@@ -8,9 +8,9 @@ import pyomo.environ as pyo
 from pyomo.opt import SolverFactory, SolverStatus, TerminationCondition
 # import cplex
 # print(cplex.__version__)
-import logging
-
-logging.basicConfig(level=logging.DEBUG)
+# import logging
+#
+# logging.basicConfig(level=logging.DEBUG)
 os.environ["PATH"] += r";C:\Program Files\IBM\ILOG\CPLEX_Studio2212\cplex\bin\x64_win64"
 
 # Debug: verificați variabila PATH

@@ -1832,7 +1832,7 @@ class OptScopeNurseDayShiftType:
 
 # %%
 # Read data
-with open(r'C:\Users\bianc\PycharmProjects\licenta_sheet\GA_yt\data\instances1_24\Instance2.txt', 'r') as file:
+with open(r'C:\Users\bianc\PycharmProjects\licenta_sheet\GA_yt\data\instances1_24\Instance1.txt', 'r') as file:
     raw_data = file.readlines()
     # %%
 horizon_length = raw_data[4]
