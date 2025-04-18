@@ -1,6 +1,6 @@
 (function () {
 	"use strict";
-
+	console.log("main.js loaded");
 	var treeviewMenu = $('.app-menu');
 
 	// Toggle Sidebar
@@ -24,4 +24,8 @@
 	//Activate bootstrip tooltips
 	$("[data-toggle='tooltip']").tooltip();
 
-})();
+
+ }
+)();
+
+//
