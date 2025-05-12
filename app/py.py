@@ -411,7 +411,7 @@ class Day:
             self.Next = next[0]
 
     def get_prev(self):
-        prev = [d for d in global_object.Day if d.DayID == self.DayID - 1]
+        prev = [d for d in global_object.Day if d.DayID == int(self.DayID[1:]) - 1]
         if len(prev) > 0:
             self.Previous = prev[0]
 
