@@ -1,0 +1,29 @@
+{% extends "admin/change_list.html" %}
+
+{% load admin_urls i18n %}
+
+{% block admin_change_list %}
+  {# copiază conţinutul din admin/change_list.html, incluzând cl şi result_list #}
+  {% block object-tools %}{{ block.super }}{% endblock %}
+  {% block result_list %}
+    <h1>{{ cl.title }}</h1>
+  <div class="cards-grid">
+    {% for obj in cl.result_list %}
+      <div class="card">
+        <h2 class="card-title">
+          <a href="{% url 'admin:%s_%s_change' cl.opts.app_label cl.opts.model_name obj.pk %}">
+            {{ obj.title }}
+          </a>
+        </h2>
+        <ul class="card-meta">
+          <li><strong>User:</strong> {{ obj.user }}</li>
+          <li><strong>Activ:</strong> {{ obj.is_active|yesno:"Da,Nu" }}</li>
+          <li><strong>Aprobat:</strong> {{ obj.is_approved|yesno:"Da,Nu" }}</li>
+        </ul>
+      </div>
+    {% empty %}
+      <p>{% trans "Nu există obiecte." %}</p>
+    {% endfor %}
+  </div>
+  {% endblock %}
+{% endblock %}
