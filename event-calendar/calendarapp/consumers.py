@@ -12,13 +12,6 @@ CHANNEL_MAP = {}
 logger = logging.getLogger(__name__)
 class RoleBasedNotificationConsumer(AsyncWebsocketConsumer):
     async def connect(self):
-        # # Acceptă conexiunea WebSocket
-        # await self.accept()
-        # # Obține utilizatorul din contextul conexiunii
-        # user = self.scope['user']
-        # # Salvează channel_name-ul utilizatorului în dicționar
-        # CHANNEL_MAP[user.id] = self.channel_name
-        # print(f"User {user.id} connected with channel {self.channel_name}")
         user = self.scope['user']
         if user.is_anonymous:
             await self.close()
@@ -56,7 +49,6 @@ class RoleBasedNotificationConsumer(AsyncWebsocketConsumer):
                 }
             )
         elif msg_type == "addEvent":
-            # -- al doilea tip de mesaj --
             sender = data.get("sender")
             event_id = data.get("title")
             message = f"Evenimentul {event_id} a fost adăugat de {sender}"
@@ -93,6 +85,18 @@ class RoleBasedNotificationConsumer(AsyncWebsocketConsumer):
                     "payload": payload,
                 }
             )
+        elif msg_type == "save_shift_requests":
+            timestamp = data.get("timestamp")
+            # Exemplu: vrem să anunțăm toți ceilalți clienți din același grup
+            await self.channel_layer.group_send(
+                self.group_name,
+                {
+                    "type": "shift_saved_notification",  # numele metodei handler din această clasă
+                    "timestamp": timestamp,
+                    # Dacă vreți, puteți transmite aici și lista ID-urilor modificate
+                    # "updated_ids": data.get("ids", [])
+                }
+            )
         elif msg_type == "event_approved":
             owner_id = data["ownerId"]  # îl bagi în payload din JS
             target_group = f"user_{owner_id}"
@@ -117,30 +121,29 @@ class RoleBasedNotificationConsumer(AsyncWebsocketConsumer):
                     "sender": data["sender"],
                 }
             )
+        elif msg_type== "shift_request_approve":
+            owner = data.get("owner")
+            event_id = data.get("message")
+            target_group = f"user_{owner}"
+            message = f"Shift_requestul {event_id} a fost aprobat de {sender}"
+            await self.channel_layer.group_send(target_group,
+                {
+                    "owner":owner,
+                    "type": "shift_request_add",
+                    "message": message,
+                    "sender": sender,
+                })
+        elif msg_type== "shift_request_add":
+            sender = data.get("sender")
+            event_id = data.get("raw")
+            message = f"Shift_requestul {event_id} a fost adăugat de {sender}"
+            await self.channel_layer.group_send(self.group_name,
+                {
+                    "type": "shift_request_add",
+                    "message": message,
+                    "sender": sender,
+                })
 
-        # try:
-            #     event = await sync_to_async(Event.objects.get)(id=event_id)
-            #     logger.debug("Event găsit: %s", event)
-            # except Event.DoesNotExist:
-            #     logger.error(f"Event {event_id} nu există")
-            #     return
-
-            # notificăm creatorul evenimentului
-
-            # channel = CHANNEL_MAP.get(ownerId)
-            # logger.debug(f"Canal pentru ownerId {ownerId}: {channel}")
-            # if channel:
-            #     message = f"Evenimentul “{event_id}” a fost {verb} de {sender}"
-            #     await self.channel_layer.send(
-            #         channel,
-            #         {
-            #             "type": "notificare_message",
-            #             "message": message,
-            #             "sender": sender,
-            #         }
-            #     )
-            # else:
-            #     logger.debug(f"No channel pentru user {ownerId}, notificare sărită")
         else:
             logger.warning(f"RECEIVE: tip necunoscut: {msg_type}")
 
@@ -163,6 +166,16 @@ class RoleBasedNotificationConsumer(AsyncWebsocketConsumer):
         }
         await self.send(text_data=json.dumps(payload))
         logger.debug(f"ADDEVENT: mesaj trimis payload={payload!r}")
+    async  def shift_request_add(self,event):
+        logger.debug(f"SHIFTREQUESTs: event={event!r}, trimitem către client canal {self.channel_name}")
+        payload = {
+            'type': 'shift_request_add',
+            'message': event.get('message'),
+            'sender': event.get('sender'),
+            'url': '/instances/'
+        }
+        await self.send(text_data=json.dumps(payload))
+        logger.debug(f"ADDEVENT: mesaj trimis payload={payload!r}")
     async  def approve_message(self,event):
         logger.debug(f"APPROVE_MESSAGE: event={event!r}, trimitem către client canal {self.channel_name}")
         payload = {
@@ -179,6 +192,35 @@ class RoleBasedNotificationConsumer(AsyncWebsocketConsumer):
         }
         await self.send(text_data=json.dumps(payload))
         logger.debug(f"DENIED_MESSAGE: mesaj trimis payload={payload!r}")
+
+    async def shift_request_add(self, event):
+        logger.debug(f"SHIFTREQUEST_ADD: event={event!r}")
+        payload = {
+            "type": "shift_request_add",
+            "message": event.get("message"),
+            "sender": event.get("sender"),
+            "owner": event.get("owner"),
+        }
+        await self.send(text_data=json.dumps(payload))
+
+    async def shift_saved_notification(self, event):
+
+        timestamp = event["timestamp"]
+        # Spre exemplu, trimitem înapoi către browser un JSON care să anunțe că s-a salvat:
+        await self.send(text_data=json.dumps({
+            "type": "info",
+            "message": f"ShiftRequest a fost salvat la {timestamp}"
+        }))
+class TypingConsumer(AsyncWebsocketConsumer):
+    async def connect(self):
+        await self.accept()
+
+    async def receive(self, text_data):
+        """
+        Browserul trimite {"typing": true/false}.
+        Serverul doar face broadcast peste acelaşi socket (eco).
+        """
+        await self.send(text_data=text_data)
 
 
 

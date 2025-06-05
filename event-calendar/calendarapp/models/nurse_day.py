@@ -183,3 +183,25 @@ class NurseDay(models.Model):
                 value = value + nursedayshifttype.calc_KPISoftShiftOffRequest()
         self.KPISoftShiftOffRequest = value
         return value
+
+    class Meta:
+        # Variante posibile (alegeţi una dintre cele două)
+        # 1) unique_together (metodă compatibilă cu versiuni mai vechi de Django)
+        unique_together = ('Nurse', 'Day')
+
+        # 2) UniqueConstraint (mai explicit și recomandat în Django ≥ 2.2)
+        # constraints = [
+        #     models.UniqueConstraint(
+        #         fields=['Nurse', 'Day'],
+        #         name='unique_nurse_day'
+        #     )
+        # ]
+
+        indexes = [
+            models.Index(fields=['Nurse', 'Day'], name='idx_nurse_day'),
+        ]
+        verbose_name = 'NurseDay'
+        verbose_name_plural = 'NurseDays'
+
+    def __str__(self):
+        return f"{self.Nurse} – {self.Day} (DayOff: {self.IsDayOff})"

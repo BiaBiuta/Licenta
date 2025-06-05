@@ -1,4 +1,4 @@
-# cal/views.py
+# cal/views_chat.py
 import logging
 import re
 

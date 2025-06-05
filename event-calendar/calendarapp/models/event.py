@@ -5,6 +5,10 @@ from django.urls import reverse
 from calendarapp.models import EventAbstract
 from accounts.models import User
 from calendarapp.models.global_object  import GlobalObject
+from calendarapp.models.nurse  import Nurse
+from calendarapp.models.day  import Day
+from calendarapp.models.shift_type  import ShiftType
+from calendarapp.models.nurse_day_shift_type  import NurseDayShiftType
 
 class EventManager(models.Manager):
     """ Event manager """
@@ -97,15 +101,19 @@ class EventManager(models.Manager):
 
 class Event(EventAbstract):
     """ Event model """
-
-    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="events")
+    NurseDayShiftType = models.ForeignKey(NurseDayShiftType, on_delete=models.CASCADE)
+    user = models.ForeignKey(User, on_delete=models.CASCADE)
     title = models.CharField(max_length=200)
     description = models.TextField()
     start_time = models.DateTimeField()
     end_time = models.DateTimeField()
     is_approved = models.BooleanField(default=False)
-    department= models.ForeignKey(GlobalObject, on_delete=models.CASCADE,default="",related_name="events")
+    department= models.ForeignKey(GlobalObject, on_delete=models.CASCADE,default="")
     objects = EventManager()
+    # nurse = models.ForeignKey(Nurse, to_field='EmployeeID', on_delete=models.CASCADE)
+    #
+    # day = models.ForeignKey(Day, to_field='DayID', on_delete=models.CASCADE)
+    # shiftType = models.ForeignKey(ShiftType, to_field='ShiftID', on_delete=models.CASCADE)
 
     def __str__(self):
         return self.title

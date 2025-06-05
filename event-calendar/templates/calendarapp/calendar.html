@@ -543,13 +543,24 @@ $(document).ready(function() {
     console.log("În document-ready, leg handler pe #request-form");
 
   $('#request-form').on('submit', function(event) {
-  let raw = $('#id_shift_type').val();
-  console.log("Valoarea selectată pentru shift_type:", raw);
-  if (!raw) {
-    // Dacă nu a fost selectată nicio opțiune validă
-    event.preventDefault();
-    alert("Vă rugăm să selectați un tip de tură înainte de a trimite.");
-  }
+      let raw = $('#id_shift_type').val();
+      console.log("Valoarea selectată pentru shift_type:", raw);
+      event.preventDefault();
+      console.log('Form-request submitted');
+      if (!raw) {
+        // Dacă nu a fost selectată nicio opțiune validă
+        event.preventDefault();
+        alert("Vă rugăm să selectați un tip de tură înainte de a trimite.");
+      }
+      socket.send(JSON.stringify({
+          type: 'shift_request_add',
+          sender: '{{ request.user }}',        // definit deja în JS
+          event: {
+              raw
+          }
+      }));
+      this.submit()
+
   //event.preventDefault();
   // În rest – NU mai apelați this.submit() și NU faceți preventDefault().
   // Browser-ul va include automat în POST: shift_type=<valoarea selectată>
@@ -563,17 +574,17 @@ $(document).ready(function() {
 </script>
 
 
-{#    <script>#}
-{#    console.log("am intrat in script sa ma conectez")#}
-{#    const worker = new SharedWorker("{% static 'js/socketWorker.js' %}");#}
-{##}
-{#    worker.port.onmessage = function (e) {#}
-{#        const data = e.data;#}
-{#        console.log('Message received from WebSocket:', data);#}
-{#        alert(data.message);#}
-{#    };#}
-{##}
-{#    worker.port.start(); // Start the communication with the worker#}
-{#</script>#}
+    <script>
+    console.log("am intrat in script sa ma conectez")
+    const worker = new SharedWorker("{% static 'js/socketWorker.js' %}");
+
+    worker.port.onmessage = function (e) {
+        const data = e.data;
+        console.log('Message received from WebSocket:', data);
+        alert(data.message);
+    };
+
+    worker.port.start(); // Start the communication with the worker
+</script>
 {% endblock extrascripts %}
 

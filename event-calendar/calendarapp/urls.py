@@ -1,9 +1,10 @@
 from django.urls import path
 
 from . import views
+
 from calendarapp.views.approve_event import approve_event
 from calendarapp.views.deny_event import deny_event
-
+from calendarapp.views.views_chat import ChatView, chat_bubble, shift_table_fragment
 app_name = "calendarapp"
 
 
@@ -75,4 +76,8 @@ path('api/shift_types_with_deficit/', views.api_shift_types_with_deficit, name='
 
     # path('domains/', views.DomainDashboardView.as_view(), name='domain_dashboard'),
     # path('domains/<int:pk>/', views.DomainCalendarView.as_view(), name='domain_schedule'),
+    path("chat/", views.ChatView.as_view(), name="chat"),
+    path("scheduler/", views.SchedulerView.as_view(), name="scheduler"),
+    path("bubble/", views.chat_bubble, name="bubble"),
+    path("debug-box/", views.debug_box, name="debug-box"),
 ]

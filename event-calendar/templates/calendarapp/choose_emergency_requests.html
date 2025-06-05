@@ -69,7 +69,7 @@
                   id="id_remove_nurses"
                 >
                   {% for nurse in nurses_on_shift %}
-                    <option value="{{ nurse.id }}">{{ nurse }}</option>
+                    <option value="{{ nurse.EmployeeID }}">{{ nurse }}</option>
                   {% endfor %}
                 </select>
                 <div class="form-text">Selectează unul sau mai mulți asistenți pe care să îi pui OFF.</div>
@@ -89,7 +89,7 @@
                   id="id_call_nurses"
                 >
                   {% for nurse in nurses_on_dayoff %}
-                    <option value="{{ nurse.id }}">{{ nurse }}</option>
+                    <option value="{{ nurse.EmployeeID }}">{{ nurse }}</option>
                   {% endfor %}
                 </select>
                 <div class="form-text">Selectează unul sau mai mulți asistenți pe care să îi chemi să acopere.</div>

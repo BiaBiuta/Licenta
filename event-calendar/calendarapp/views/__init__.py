@@ -15,9 +15,13 @@ add_shift_request,api_shift_types_with_deficit
 
 )
 from .views import (timetable,instance_list,instance_detail,choose_instance,select_instance,choose_shift_requests,choose_dayoff_requests,requests_submitted,DashboardView,confirm_schedule,cancel_schedule,schedule_log_events,unit_details_ajax,choose_emergency_requests)
+from .views_chat import(
+    ChatView,
+    chat_bubble,
+    shift_table_fragment,)
+from .views_scheduler import (SchedulerView,debug_box)
 
-
-__all__ = [
+__all__ = {
     AllEventsListView,
     RunningEventsListView,
     UpcomingEventsListView,
@@ -32,7 +36,8 @@ __all__ = [
     delete_event,
     next_week,
     next_day,
+    ChatView, chat_bubble, shift_table_fragment,
 
-]
+}
 
 

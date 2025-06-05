@@ -4,13 +4,6 @@
 
 {% block content %}
 <div class="container my-4">
-  <!-- Breadcrumb -->
-{#  <nav aria-label="breadcrumb" class="mb-3">#}
-{#    <ol class="breadcrumb">#}
-{#      <li class="breadcrumb-item"><a href="{% url 'dashboard' %}">Dashboard</a></li>#}
-{#      <li class="breadcrumb-item active" aria-current="page">Generează Orar</li>#}
-{#    </ol>#}
-{#  </nav>#}
 
   <h1 class="mb-4">Panou Generare Orar</h1>
 
@@ -44,64 +37,108 @@
     </div>
 
 <!-- Col 2: Informații despre unitate (revizuit) -->
-<div class="col-lg-8">
-  <div class="card shadow-sm mb-4">
-    <div class="card-header bg-white">
-      <strong>Detalii Unitate Medicală</strong>
+    <div class="col-lg-8">
+      <div class="card shadow-sm mb-4">
+        <div class="card-header ">
+          <strong>Detalii Unitate Medicală</strong>
+        </div>
+        <div class="card-body">
+          <table class="table table-borderless mb-0">
+            <tbody>
+              <tr>
+                <th scope="row">Medici</th>
+                <td id="badgeNurses">–</td>
+                <th>Ture</th>
+                <td id="badgeShiftTypes">–</td>
+              </tr>
+              <tr>
+                <th>Total minute</th>
+                <td id="badgeTotalMin">–</td>
+                <th>Până la min</th>
+                <td id="badgeToMin">–</td>
+              </tr>
+              <tr>
+                <th>Până la max</th>
+                <td id="badgeToMax">–</td>
+                <th>Ultima generare</th>
+                <td id="badgeLastGen">–</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
     </div>
-    <div class="card-body">
-      <table class="table table-borderless mb-0">
-        <tbody>
-          <tr>
-            <th scope="row">Medici</th>
-            <td id="badgeNurses">–</td>
-            <th>Ture</th>
-            <td id="badgeShiftTypes">–</td>
-          </tr>
-          <tr>
-            <th>Total minute</th>
-            <td id="badgeTotalMin">–</td>
-            <th>Până la min</th>
-            <td id="badgeToMin">–</td>
-          </tr>
-          <tr>
-            <th>Până la max</th>
-            <td id="badgeToMax">–</td>
-            <th>Ultima generare</th>
-            <td id="badgeLastGen">–</td>
-          </tr>
-        </tbody>
-      </table>
-    </div>
-  </div>
-</div>
 
   <!-- Istoric generări -->
- <div class="card shadow-sm ">
+<div class="card shadow-sm">
   <div class="card-header bg-white">
     <strong>Istoric Generări Orar</strong>
   </div>
   <ul class="list-group list-group-flush">
+    {# 1) Primii 3 items afișați mereu #}
     {% for log in generate_logs %}
-      <li class="list-group-item d-flex justify-content-between align-items-center">
-        <div>
-          <i class="bi bi-calendar-check me-2"></i>
-          {{ log.generated_at|date:"d.m.Y H:i" }} – Unitate medicală {{ log.department.Name }}
-        </div>
-        <button
-          type="button"
-          class="btn btn-sm btn-outline-primary btn-load-log"
-          data-url="{% url 'calendarapp:schedule_log_events' log.id %}">
-          Vizualizează
-        </button>
-      </li>
+      {% if forloop.counter <= 3 %}
+        <li
+          class="list-group-item d-flex justify-content-between align-items-center"
+        >
+          <div>
+            <i class="bi bi-calendar-check me-2"></i>
+            {{ log.generated_at|date:"d.m.Y H:i" }} – Unitate medicală {{ log.department.Name }}
+          </div>
+          <button
+            type="button"
+            class="btn btn-sm btn-outline-primary btn-load-log"
+            data-url="{% url 'calendarapp:schedule_log_events' log.id %}"
+          >
+            Vizualizează
+          </button>
+        </li>
+      {% else %}
+        {# 2) Restul elementelor punem într-un container collapse, ascuns inițial #}
+        {% if forloop.counter == 4 %}
+          <div class="collapse" id="moreLogs">
+        {% endif %}
+            <li
+              class="list-group-item d-flex justify-content-between align-items-center"
+            >
+              <div>
+                <i class="bi bi-calendar-check me-2"></i>
+                {{ log.generated_at|date:"d.m.Y H:i" }} – Unitate medicală {{ log.department.Name }}
+              </div>
+              <button
+                type="button"
+                class="btn btn-sm btn-outline-primary btn-load-log"
+                data-url="{% url 'calendarapp:schedule_log_events' log.id %}"
+              >
+                Vizualizează
+              </button>
+            </li>
+        {% if forloop.last %}
+          </div>
+        {% endif %}
+      {% endif %}
     {% empty %}
       <li class="list-group-item text-muted">
         Nu există generări anterioare.
       </li>
     {% endfor %}
   </ul>
+
+  {# 3) Dacă există mai mult de 3 elemente, afișăm butonul de toggle #}
+  {% if generate_logs|length > 3 %}
+    <div class="card-footer bg-white text-center">
+      <button
+        id="toggle-more-logs"
+        class="btn btn-sm btn-outline-secondary"
+        data-bs-toggle="collapse"
+        data-bs-target="#moreLogs"
+        aria-expanded="false"
+        aria-controls="moreLogs"
+      >Arată mai multe</button>
+    </div>
+  {% endif %}
 </div>
+
     </div>
 <!-- Buton care deschide modalul de cereri -->
 <!-- butonul care deschide modalul (disabled implicit) -->
@@ -259,6 +296,26 @@ document.addEventListener('DOMContentLoaded', function() {
   }
 });
 document.addEventListener('DOMContentLoaded', function() {
+     // Găsim butonul de toggle și containerul collapse
+  const toggleBtn = document.getElementById('toggle-more-logs');
+  const collapseDiv = document.getElementById('moreLogs');
+
+  if (!toggleBtn || !collapseDiv) {
+    // Dacă nu există în pagină, nu facem nimic
+    return;
+  }
+
+  // Când începe animația de expandare/collapse, schimbăm textul butonului
+  collapseDiv.addEventListener('shown.bs.collapse', function () {
+    toggleBtn.textContent = 'Colapsează';
+    toggleBtn.setAttribute('aria-expanded', 'true');
+  });
+
+  collapseDiv.addEventListener('hidden.bs.collapse', function () {
+    toggleBtn.textContent = 'Arată mai multe';
+    toggleBtn.setAttribute('aria-expanded', 'false');
+
+});
   const calendarEl = document.getElementById('calendarMaster');
   const calendarCard = document.getElementById('calendarCard');
   const initialSources = [];
@@ -333,6 +390,11 @@ document.getElementById('apply-requests').addEventListener('click', () => {
     document.getElementById('apply-requests').click();
     document.getElementById('gen-form').submit();
   });
+
+
+
+
+
 </script>
 
 
