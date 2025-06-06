@@ -27,7 +27,7 @@ urlpatterns = [
     path("cal/", views.timetable, name="timetable"),
     path('instances/', views.instance_list, name='instance_list'),
     # <path:> permite slash-uri în parametrul file_path
-    path('instances/<path:file_path>/', views.instance_detail, name='instance_detail'),
+    path('instances_detail/<path:file_path>/', views.instance_detail, name='instance_detail'),
     path('instance/choose/', views.choose_instance, name='choose_instance'),
     path('instance/select/', views.select_instance, name='select_instance'),
     path('instnace/confirm/', views.confirm_schedule, name='confirm_schedule'),

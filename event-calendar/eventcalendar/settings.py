@@ -173,4 +173,4 @@ STATICFILES_DIRS = (os.path.join(BASE_DIR, "static"),)
 MEDIA_ROOT = os.path.join(BASE_DIR, 'media/') # 'data' is my media folder
 MEDIA_URL = '/media/'
 # settings.py
-INSTANCE_DIR = 'C:\\Users\\bianc\\PycharmProjects\\licenta_sheet\\GA_yt\\data\\instances1_24'
+INSTANCE_DIR = '..\\database\\instances1_24'

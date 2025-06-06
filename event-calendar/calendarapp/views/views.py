@@ -496,16 +496,6 @@ def read_instance_file(file_path: str):
         shiftype = ShiftType.objects.get(ShiftID=shiftoffreq_shift)
         ShiftOption.objects.create(nurse=nurse, department=global_object, day=day, shift_type=shiftype, req_type='OF',
                                    weight=shiftoffreq_offrequestweight)
-        # nurse = [n for n in global_object.Nurse if n.EmployeeID == shiftoffreq_nurse][0]
-        # day = [d for d in global_object.Day if d.DayID == (num+str(shiftoffreq_day))][0]
-        # shifttype = [s for s in global_object.ShiftType if s.ShiftID == shiftoffreq_shift][0]
-        #
-        # # Create new or find existing NurseShiftTypeDay object
-        # nurseday = [nd for nd in nurse.NurseDay if nd.Day == day][0]
-        # nds = NurseDayShiftType(IsOnRequest=False, IsOffRequest=True, OnRequestWeight=0.0,
-        #                         OffRequestWeight=shiftoffreq_offrequestweight, Nurse=nurse, Day=day,
-        #                         ShiftType=shifttype, NurseDay=nurseday)
-        # nds.save()
 
     for cover in raw_data[cover_req_input_start:cover_req_input_end]:
         cover_information = cover.split(',')
@@ -732,7 +722,7 @@ def timetable(request):
     global_object_id=global_object.id
     global_object_name=global_object.Name
 
-    with open(fr"C:\Users\bianc\PycharmProjects\licenta_sheet\GA_yt\data\instances1_24\{global_object_name}", 'r') as f:
+    with open(fr".\..\database\instances1_24\{global_object_name}", 'r') as f:
         raw_data = f.readlines()
 
     # 2) compute your globals
@@ -1223,22 +1213,7 @@ def get_user_id(request):
 
 @login_required
 def choose_emergency_requests(request):
-    """
-    Etapa 1 (GET fără param 'date'):
-      – afișează un formular simplu cu un <input type="date">.
 
-    Etapa 2 (GET cu param 'date'):
-      – listează:
-         * asistenții care au ture programate în ziua respectivă (NurseShift)
-         * asistenții cu zi liberă aprobată (DayOffRequest status='A')
-
-    Etapa 3 (POST):
-      – primește:
-         - hidden-ul 'date'
-         - 'remove_nurses' → lista de nurse care trebuie puse OFF
-         - 'call_nurses' → lista de nurse care urmează să fie chemate ON
-      – creează un EmergencyRequest și le adaugă la M2M
-    """
     # 1. Omiterea de la pasul POST: dacă e GET fără ?date=…
     if request.method == 'GET' and 'date' not in request.GET:
         # Afișez pagina doar cu selector de date
